@@ -88,7 +88,7 @@ export interface IntervalTimerItem {
 }
 
 export type ActiveTab = 'all' | 'stopwatches' | 'timers' | 'intervals';
-export type ProximityAction = 'start' | 'pause' | 'stop' | 'cycle';
+export type ProximityAction = 'cycle';
 export type ViewLayout = 'grid' | 'compact';
 export type SoundPreset = 'chime' | 'digital' | 'bell' | 'marimba' | 'gentle';
 
