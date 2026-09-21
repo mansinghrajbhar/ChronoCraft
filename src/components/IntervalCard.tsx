@@ -363,6 +363,19 @@ export const IntervalCard: React.FC<IntervalCardProps> = ({
             </button>
           )}
 
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(false);
+              onDelete(interval.id);
+            }}
+            className="p-1 sm:p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+            title="Delete Workout"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+
           <div className="relative" ref={menuRef}>
             <button
               type="button"
@@ -490,7 +503,8 @@ export const IntervalCard: React.FC<IntervalCardProps> = ({
                 <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
 
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setShowMenu(false);
                     onDelete(interval.id);
                   }}
