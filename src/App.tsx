@@ -244,15 +244,17 @@ export default function App() {
     let nearStartedAt = 0;
     let holdTriggeredStop = false;
 
+    // Prefer timers, then HIIT intervals, then stopwatches so the
+    // hands-free control naturally targets the user's timer first.
     const getRunning = () =>
-      proximityStopwatchesRef.current.find((s) => s.isRunning) ||
       proximityTimersRef.current.find((t) => t.isRunning) ||
-      proximityIntervalsRef.current.find((i) => i.isRunning);
+      proximityIntervalsRef.current.find((i) => i.isRunning) ||
+      proximityStopwatchesRef.current.find((s) => s.isRunning);
 
     const getStartCandidate = () =>
-      proximityStopwatchesRef.current.find((s) => !s.isRunning) ||
       proximityTimersRef.current.find((t) => !t.isRunning && !t.isCompleted) ||
-      proximityIntervalsRef.current.find((i) => !i.isRunning && !i.isCompleted);
+      proximityIntervalsRef.current.find((i) => !i.isRunning && !i.isCompleted) ||
+      proximityStopwatchesRef.current.find((s) => !s.isRunning);
 
     const startCandidate = () => {
       const candidate = getStartCandidate();
