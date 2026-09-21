@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ChronometerNotificationPlugin.class);
+        registerPlugin(ProximitySensorPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
