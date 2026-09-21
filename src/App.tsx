@@ -13,7 +13,8 @@ import {
   ColorName, 
   SoundPreset, 
   TimerPreset,
-  ClockHistoryEntry
+  ClockHistoryEntry,
+  ProximityAction
 } from './types';
 import { 
   loadStopwatches, 
@@ -154,6 +155,11 @@ export default function App() {
   const [selectedColorFilter, setSelectedColorFilter] = useState<string>('all');
   const [viewLayout, setViewLayout] = useState<'grid' | 'compact'>('grid');
   const [isMuted, setIsMuted] = useState(false);
+  const [proximityEnabled, setProximityEnabled] = useState<boolean>(() => localStorage.getItem('chronocraft_proximity_enabled') === 'true');
+  const [proximityAction, setProximityAction] = useState<ProximityAction>(() => {
+    const saved = localStorage.getItem('chronocraft_proximity_action');
+    return saved === 'start' || saved === 'pause' || saved === 'stop' || saved === 'cycle' ? saved : 'cycle';
+  });
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -209,6 +215,77 @@ export default function App() {
     window.addEventListener('click', handleGlobalClick, { once: true });
     return () => window.removeEventListener('click', handleGlobalClick);
   }, []);
+
+  useEffect(() => {
+    if (!proximityEnabled || !capacitorBridge.isAndroid()) {
+      capacitorBridge.stopProximitySensor();
+      return;
+    }
+
+    let listenerHandle: { remove: () => Promise<void> } | null = null;
+    let cancelled = false;
+    let wasNear = false;
+
+    const runAction = () => {
+      if (proximityAction === 'start') {
+        const candidate = stopwatches.find((s) => !s.isRunning) || timers.find((t) => !t.isRunning && !t.isCompleted) || intervals.find((i) => !i.isRunning && !i.isCompleted);
+        if (candidate) {
+          if ('accumulatedTime' in candidate) handleStartStopwatch(candidate.id);
+          else if ('remainingTime' in candidate) handleStartTimer(candidate.id);
+          else handleStartInterval(candidate.id);
+        }
+      } else if (proximityAction === 'pause') {
+        const candidate = stopwatches.find((s) => s.isRunning) || timers.find((t) => t.isRunning) || intervals.find((i) => i.isRunning);
+        if (candidate) {
+          if ('accumulatedTime' in candidate) handlePauseStopwatch(candidate.id);
+          else if ('remainingTime' in candidate) handlePauseTimer(candidate.id);
+          else handlePauseInterval(candidate.id);
+        }
+      } else if (proximityAction === 'stop') {
+        const candidate = stopwatches.find((s) => s.isRunning) || timers.find((t) => t.isRunning) || intervals.find((i) => i.isRunning);
+        if (candidate) {
+          if ('accumulatedTime' in candidate) handleResetStopwatch(candidate.id);
+          else if ('remainingTime' in candidate) handleResetTimer(candidate.id);
+          else handleResetInterval(candidate.id);
+        }
+      } else {
+        const running = stopwatches.find((s) => s.isRunning) || timers.find((t) => t.isRunning) || intervals.find((i) => i.isRunning);
+        if (running) {
+          if ('accumulatedTime' in running) handlePauseStopwatch(running.id);
+          else if ('remainingTime' in running) handlePauseTimer(running.id);
+          else handlePauseInterval(running.id);
+        } else {
+          const candidate = stopwatches.find((s) => !s.isRunning) || timers.find((t) => !t.isRunning && !t.isCompleted) || intervals.find((i) => !i.isRunning && !i.isCompleted);
+          if (candidate) {
+            if ('accumulatedTime' in candidate) handleStartStopwatch(candidate.id);
+            else if ('remainingTime' in candidate) handleStartTimer(candidate.id);
+            else handleStartInterval(candidate.id);
+          }
+        }
+      }
+    };
+
+    const setup = async () => {
+      listenerHandle = await capacitorBridge.addProximityListener(({ near }) => {
+        if (near && !wasNear) runAction();
+        wasNear = near;
+      });
+      if (!cancelled) await capacitorBridge.startProximitySensor(proximityAction);
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      listenerHandle?.remove().catch(() => {});
+      capacitorBridge.stopProximitySensor();
+    };
+  }, [proximityEnabled, proximityAction, stopwatches, timers, intervals]);
+
+  useEffect(() => {
+    localStorage.setItem('chronocraft_proximity_enabled', String(proximityEnabled));
+    localStorage.setItem('chronocraft_proximity_action', proximityAction);
+  }, [proximityEnabled, proximityAction]);
 
   // Sync Voice Preference with Speech Manager
   useEffect(() => {
@@ -1426,6 +1503,10 @@ export default function App() {
         onOpenHistory={handleOpenGlobalHistory}
         wakeLockActive={wakeLockActive}
         onToggleWakeLock={() => setWakeLockPref(!wakeLockPref)}
+        proximityEnabled={proximityEnabled}
+        proximityAction={proximityAction}
+        onSetProximityEnabled={(enabled) => setProximityEnabled(enabled)}
+        onSetProximityAction={(action) => setProximityAction(action)}
         voiceEnabled={voiceEnabled}
         onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
       />
