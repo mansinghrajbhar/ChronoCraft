@@ -193,6 +193,10 @@ export default function App() {
   const proximityIntervalsRef = useRef(intervals);
   const proximityActionRef = useRef(proximityAction);
   const proximityEnabledRef = useRef(proximityEnabled);
+  // Tracks the state immediately after a proximity action so two quick
+  // FAR -> NEAR gestures always alternate START <-> PAUSE, even before React
+  // has committed the state update from the previous gesture.
+  const proximityRunningRef = useRef(false);
 
   // Track page visibility changes for adaptive power saving
   useEffect(() => {
@@ -231,6 +235,10 @@ export default function App() {
     proximityIntervalsRef.current = intervals;
     proximityActionRef.current = proximityAction;
     proximityEnabledRef.current = proximityEnabled;
+    proximityRunningRef.current =
+      timers.some((t) => t.isRunning) ||
+      intervals.some((i) => i.isRunning) ||
+      stopwatches.some((s) => s.isRunning);
   }, [stopwatches, timers, intervals, proximityAction, proximityEnabled]);
 
   useEffect(() => {
@@ -240,10 +248,6 @@ export default function App() {
     let cancelled = false;
     let wasNear = false;
     let hasReading = false;
-    let holdTimer: ReturnType<typeof setTimeout> | null = null;
-    let nearStartedAt = 0;
-    let holdTriggeredStop = false;
-
     // Prefer timers, then HIIT intervals, then stopwatches so the
     // hands-free control naturally targets the user's timer first.
     const getRunning = () =>
@@ -285,10 +289,18 @@ export default function App() {
     // stopped/paused -> START, running -> PAUSE.
     // There is intentionally no proximity RESET/STOP action.
     const toggleStartPause = () => {
-      if (getRunning()) {
-        pauseRunning();
+      // Use an immediate ref for the toggle decision. React state updates are
+      // asynchronous, so relying only on state here can make the second
+      // gesture see the previous START/PAUSE state.
+      if (proximityRunningRef.current) {
+        const running = getRunning();
+        if (running) {
+          pauseRunning();
+        }
+        proximityRunningRef.current = false;
       } else {
         startCandidate();
+        proximityRunningRef.current = true;
       }
     };
 
@@ -322,7 +334,6 @@ export default function App() {
 
     return () => {
       cancelled = true;
-      if (holdTimer) clearTimeout(holdTimer);
       listenerHandle?.remove().catch(() => {});
       capacitorBridge.stopProximitySensor();
     };
