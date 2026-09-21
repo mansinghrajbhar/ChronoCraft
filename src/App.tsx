@@ -225,6 +225,7 @@ export default function App() {
     let listenerHandle: { remove: () => Promise<void> } | null = null;
     let cancelled = false;
     let wasNear = false;
+    let hasReading = false;
 
     const runAction = () => {
       if (proximityAction === 'start') {
@@ -267,6 +268,11 @@ export default function App() {
 
     const setup = async () => {
       listenerHandle = await capacitorBridge.addProximityListener(({ near }) => {
+        if (!hasReading) {
+          hasReading = true;
+          wasNear = near;
+          return;
+        }
         if (near && !wasNear) runAction();
         wasNear = near;
       });
