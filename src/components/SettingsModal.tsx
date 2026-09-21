@@ -285,7 +285,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ['start', 'Start', PlayCircle],
                       ['pause', 'Pause', PauseCircle],
                       ['stop', 'Stop', StopCircle],
-                      ['cycle', 'Start / Pause', Radio],
+                      ['cycle', 'Smart Gesture', Radio],
                     ] as const).map(([action, label, Icon]) => {
                       const selected = proximityAction === action;
                       return (
@@ -299,7 +299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       );
                     })}
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-400">A trigger is detected only on FAR → NEAR, so holding your hand near the sensor does not repeat the action.</p>
+                  <p className="mt-2 text-[10px] text-slate-400">Smart Gesture: quickly bring the glove near and away to START/PAUSE. Keep it near for about 1.2 seconds to STOP/RESET. Direct Start, Pause and Stop modes are also available.</p>
                 </div>
               )}
             </div>
