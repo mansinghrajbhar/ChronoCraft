@@ -1915,6 +1915,10 @@ export default function App() {
         onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
         wakeLockActive={wakeLockPref}
         onToggleWakeLock={() => setWakeLockPref(!wakeLockPref)}
+        proximityEnabled={proximityEnabled}
+        proximityAction={proximityAction}
+        onSetProximityEnabled={setProximityEnabled}
+        onSetProximityAction={setProximityAction}
       />
 
       <PresetsModal
