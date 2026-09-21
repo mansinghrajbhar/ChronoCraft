@@ -3,6 +3,7 @@ import { SoundPreset } from '../types';
 import { soundEngine } from '../utils/audio';
 import { speechAssistant } from '../utils/speech';
 import { capacitorBridge } from '../utils/capacitorNativeBridge';
+import { ProximityAction } from '../types';
 import { 
   X, 
   Volume2, 
@@ -17,7 +18,11 @@ import {
   Sliders, 
   RotateCcw,
   ShieldCheck,
-  Zap
+  Zap,
+  Radio,
+  PlayCircle,
+  PauseCircle,
+  StopCircle
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -32,6 +37,10 @@ interface SettingsModalProps {
   onToggleVoice: () => void;
   wakeLockActive: boolean;
   onToggleWakeLock: () => void;
+  proximityEnabled: boolean;
+  proximityAction: ProximityAction;
+  onSetProximityEnabled: (enabled: boolean) => void;
+  onSetProximityAction: (action: ProximityAction) => void;
 }
 
 const SOUND_OPTIONS: { id: SoundPreset; name: string; description: string; tag: string }[] = [
@@ -61,6 +70,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleVoice,
   wakeLockActive,
   onToggleWakeLock,
+  proximityEnabled,
+  proximityAction,
+  onSetProximityEnabled,
+  onSetProximityAction,
 }) => {
   const [selectedSound, setSelectedSound] = useState<SoundPreset>(globalSound);
   const [selectedRepeat, setSelectedRepeat] = useState<number>(globalSoundRepeat);
@@ -238,7 +251,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </label>
           </div>
 
-          {/* Section 2: Global Audio & Speech Toggles */}
+          {/* Section 2: Hands-Free Proximity Controls */}
+          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Proximity Sensor Controls</span>
+            </label>
+            <div className={'p-4 rounded-2xl border transition-all ' + (proximityEnabled
+              ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20'
+              : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40')}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={'p-2.5 rounded-xl ' + (proximityEnabled
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+                    : 'bg-slate-200 text-slate-500 dark:bg-slate-800')}>
+                    <Radio className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">Hands-free action</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Bring your hand/glove near the top sensor</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => onSetProximityEnabled(!proximityEnabled)}
+                  className={'w-11 h-6 rounded-full p-0.5 transition-colors ' + (proximityEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700')}>
+                  <div className={'w-5 h-5 rounded-full bg-white shadow-sm transition-transform ' + (proximityEnabled ? 'translate-x-5' : 'translate-x-0')} />
+                </button>
+              </div>
+              {proximityEnabled && (
+                <div className="mt-4 pt-4 border-t border-emerald-200/70 dark:border-emerald-900/50">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Trigger action</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      ['start', 'Start', PlayCircle],
+                      ['pause', 'Pause', PauseCircle],
+                      ['stop', 'Stop', StopCircle],
+                      ['cycle', 'Start / Pause', Radio],
+                    ] as const).map(([action, label, Icon]) => {
+                      const selected = proximityAction === action;
+                      return (
+                        <button key={action} type="button" onClick={() => onSetProximityAction(action)}
+                          className={'p-2.5 rounded-xl border text-left transition-all ' + (selected
+                            ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800')}>
+                          <Icon className="w-4 h-4 mb-1" />
+                          <span className="text-xs font-bold">{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[10px] text-slate-400">A trigger is detected only on FAR → NEAR, so holding your hand near the sensor does not repeat the action.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 3: Global Audio & Speech Toggles */
           <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
@@ -315,7 +382,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Notification & Lock Screen Diagnostics */}
+          {/* Section 4: Notification & Lock Screen Diagnostics */}
           <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
               <Bell className="w-3.5 h-3.5 text-emerald-500" />
