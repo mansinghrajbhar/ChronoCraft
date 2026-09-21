@@ -158,7 +158,7 @@ export default function App() {
   const [proximityEnabled, setProximityEnabled] = useState<boolean>(() => localStorage.getItem('chronocraft_proximity_enabled') === 'true');
   const [proximityAction, setProximityAction] = useState<ProximityAction>(() => {
     const saved = localStorage.getItem('chronocraft_proximity_action');
-    return saved === 'start' || saved === 'pause' || saved === 'stop' || saved === 'cycle' ? saved : 'cycle';
+    return 'cycle';
   });
 
   // Modals state
@@ -281,20 +281,15 @@ export default function App() {
       else handleResetInterval(running.id);
     };
 
-    // "Cycle" is now a glove-friendly smart gesture:
-    // - quick FAR -> NEAR: START if stopped, otherwise PAUSE
-    // - keep the glove near for 1.2 seconds: STOP/RESET
-    const quickStartPause = () => {
-      if (getRunning()) pauseRunning();
-      else startCandidate();
-    };
-
-    const runSelectedAction = () => {
-      const action = proximityActionRef.current;
-      if (action === 'start') startCandidate();
-      else if (action === 'pause') pauseRunning();
-      else if (action === 'stop') stopRunning();
-      else quickStartPause();
+    // Each FAR -> NEAR transition toggles the current clock:
+    // stopped/paused -> START, running -> PAUSE.
+    // There is intentionally no proximity RESET/STOP action.
+    const toggleStartPause = () => {
+      if (getRunning()) {
+        pauseRunning();
+      } else {
+        startCandidate();
+      }
     };
 
     const handleProximity = ({ near }: { near: boolean }) => {
@@ -306,34 +301,9 @@ export default function App() {
         return;
       }
 
-      // FAR -> NEAR is the actual trigger. This makes the control work
-      // with a boxing glove: bring the glove to the sensor and the action
-      // happens immediately; there is no need to touch the screen or move
-      // the glove away first.
+      // Trigger once per FAR -> NEAR transition.
       if (near && !wasNear) {
-        nearStartedAt = Date.now();
-        holdTriggeredStop = false;
-
-        if (proximityActionRef.current === 'cycle') {
-          // Quick near = START/PAUSE immediately.
-          quickStartPause();
-
-          // Holding near for 1.2s = STOP/RESET.
-          holdTimer = setTimeout(() => {
-            if (wasNear && !holdTriggeredStop) {
-              holdTriggeredStop = true;
-              stopRunning();
-            }
-          }, 1200);
-        } else {
-          runSelectedAction();
-        }
-      }
-
-      // NEAR -> FAR simply arms the next trigger.
-      if (!near && wasNear && holdTimer) {
-        clearTimeout(holdTimer);
-        holdTimer = null;
+        toggleStartPause();
       }
 
       wasNear = near;
@@ -344,7 +314,7 @@ export default function App() {
       // If proximity was already enabled when the app mounted, start it
       // after the listener is attached so the first reading is not missed.
       if (!cancelled && proximityEnabledRef.current) {
-        await capacitorBridge.startProximitySensor(proximityActionRef.current);
+        await capacitorBridge.startProximitySensor('cycle');
       }
     };
 
@@ -370,7 +340,7 @@ export default function App() {
     if (!capacitorBridge.isAndroid()) return;
 
     if (proximityEnabled) {
-      capacitorBridge.startProximitySensor(proximityAction);
+      capacitorBridge.startProximitySensor('cycle');
     } else {
       capacitorBridge.stopProximitySensor();
     }
