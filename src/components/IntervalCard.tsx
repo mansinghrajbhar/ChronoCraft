@@ -19,7 +19,8 @@ import {
   Dumbbell, 
   MoreVertical,
   BookmarkPlus,
-  Maximize2
+  Maximize2,
+  Clock
 } from 'lucide-react';
 
 interface IntervalCardProps {
