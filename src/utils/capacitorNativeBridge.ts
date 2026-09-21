@@ -1,4 +1,4 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, PluginListenerHandle } from '@capacitor/core';
 
 export const ALARM_CHANNEL_ID = 'chronocraft_alarm_channel';
 export const ACTIVE_TIMER_CHANNEL_ID = 'chronocraft_active_timer_channel';
@@ -50,6 +50,14 @@ interface HapticsPlugin {
 const LocalNotifications = registerPlugin<LocalNotificationsPlugin>('LocalNotifications');
 const Haptics = registerPlugin<HapticsPlugin>('Haptics');
 const ChronometerNotification = registerPlugin<any>('ChronometerNotification');
+
+interface ProximitySensorPlugin {
+  start(options?: { action?: string }): Promise<void>;
+  stop(): Promise<void>;
+  addListener(eventName: 'proximityChange', listenerFunc: (event: { near: boolean }) => void): Promise<PluginListenerHandle>;
+}
+
+const ProximitySensor = registerPlugin<ProximitySensorPlugin>('ProximitySensor');
 
 class CapacitorNativeBridge {
   private isInitialized = false;
@@ -281,6 +289,24 @@ class CapacitorNativeBridge {
   /**
    * Native device haptic feedback
    */
+  public async startProximitySensor(action: 'start' | 'pause' | 'stop' | 'cycle' = 'cycle'): Promise<void> {
+    if (!this.isAndroid()) return;
+    try { await ProximitySensor.start({ action }); }
+    catch (e) { console.warn('Proximity sensor start note:', e); }
+  }
+
+  public async stopProximitySensor(): Promise<void> {
+    if (!this.isAndroid()) return;
+    try { await ProximitySensor.stop(); }
+    catch (e) { console.warn('Proximity sensor stop note:', e); }
+  }
+
+  public async addProximityListener(listener: (event: { near: boolean }) => void): Promise<PluginListenerHandle | null> {
+    if (!this.isAndroid()) return null;
+    try { return await ProximitySensor.addListener('proximityChange', listener); }
+    catch (e) { console.warn('Proximity sensor listener note:', e); return null; }
+  }
+
   public async triggerHaptic(style: 'light' | 'medium' | 'heavy' | 'alarm'): Promise<void> {
     if (!this.isNative()) {
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
