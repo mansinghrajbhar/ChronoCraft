@@ -35,8 +35,24 @@ public class ProximitySensorPlugin extends Plugin implements SensorEventListener
         }
 
         if (!listening) {
-            sensorManager.registerListener(this, proximitySensor, SensorManager.SENSOR_DELAY_NORMAL);
+            boolean registered = sensorManager.registerListener(
+                this,
+                proximitySensor,
+                SensorManager.SENSOR_DELAY_GAME
+            );
+            if (!registered) {
+                call.reject("Android refused to register the proximity sensor");
+                return;
+            }
             listening = true;
+
+            // Send an immediate diagnostic/initial reading when available.
+            // Some phones report only binary near/far values.
+            JSObject ready = new JSObject();
+            ready.put("available", true);
+            ready.put("name", proximitySensor.getName());
+            ready.put("maximumRange", proximitySensor.getMaximumRange());
+            notifyListeners("proximityReady", ready);
         }
         call.resolve();
     }
