@@ -20,9 +20,7 @@ import {
   ShieldCheck,
   Zap,
   Radio,
-  PlayCircle,
-  PauseCircle,
-  StopCircle
+  Radio
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -282,10 +280,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Trigger action</p>
                   <div className="grid grid-cols-2 gap-2">
                     {([
-                      ['start', 'Start', PlayCircle],
-                      ['pause', 'Pause', PauseCircle],
-                      ['stop', 'Stop', StopCircle],
-                      ['cycle', 'Smart Gesture', Radio],
+                      ['cycle', 'Start / Pause', Radio],
                     ] as const).map(([action, label, Icon]) => {
                       const selected = proximityAction === action;
                       return (
@@ -299,7 +294,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       );
                     })}
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-400">Smart Gesture: quickly bring the glove near and away to START/PAUSE. Keep it near for about 1.2 seconds to STOP/RESET. Direct Start, Pause and Stop modes are also available.</p>
+                  <p className="mt-2 text-[10px] text-slate-400">Bring the glove near the phone to toggle START ↔ PAUSE. Move it away, then bring it near again for the next action. No screen touch is required.</p>
                 </div>
               )}
             </div>
