@@ -305,7 +305,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Global Audio & Speech Toggles */
+          {/* Section 3: Global Audio & Speech Toggles */}
           <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
