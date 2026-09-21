@@ -19,7 +19,6 @@ import {
   RotateCcw,
   ShieldCheck,
   Zap,
-  Radio,
   Radio
 } from 'lucide-react';
 
