@@ -193,6 +193,9 @@ export default function App() {
   const proximityIntervalsRef = useRef(intervals);
   const proximityActionRef = useRef(proximityAction);
   const proximityEnabledRef = useRef(proximityEnabled);
+  // Remember the last clock the user explicitly interacted with so proximity
+  // can control HIIT independently instead of always preferring timers.
+  const proximityTargetRef = useRef<{ type: 'stopwatch' | 'timer' | 'interval'; id: string } | null>(null);
   // Tracks the state immediately after a proximity action so two quick
   // FAR -> NEAR gestures always alternate START <-> PAUSE, even before React
   // has committed the state update from the previous gesture.
@@ -250,15 +253,40 @@ export default function App() {
     let hasReading = false;
     // Prefer timers, then HIIT intervals, then stopwatches so the
     // hands-free control naturally targets the user's timer first.
-    const getRunning = () =>
-      proximityTimersRef.current.find((t) => t.isRunning) ||
-      proximityIntervalsRef.current.find((i) => i.isRunning) ||
-      proximityStopwatchesRef.current.find((s) => s.isRunning);
+    const getTargetClock = () => {
+      const target = proximityTargetRef.current;
+      if (target) {
+        if (target.type === 'timer') return proximityTimersRef.current.find((t) => t.id === target.id);
+        if (target.type === 'interval') return proximityIntervalsRef.current.find((i) => i.id === target.id);
+        return proximityStopwatchesRef.current.find((s) => s.id === target.id);
+      }
+      return (
+        proximityTimersRef.current.find((t) => t.isRunning) ||
+        proximityIntervalsRef.current.find((i) => i.isRunning) ||
+        proximityStopwatchesRef.current.find((s) => s.isRunning) ||
+        proximityTimersRef.current.find((t) => !t.isCompleted) ||
+        proximityIntervalsRef.current.find((i) => !i.isCompleted) ||
+        proximityStopwatchesRef.current[0]
+      );
+    };
 
-    const getStartCandidate = () =>
-      proximityTimersRef.current.find((t) => !t.isRunning && !t.isCompleted) ||
-      proximityIntervalsRef.current.find((i) => !i.isRunning && !i.isCompleted) ||
-      proximityStopwatchesRef.current.find((s) => !s.isRunning);
+    const pauseTarget = () => {
+      const target = getTargetClock();
+      if (!target || !target.isRunning) return false;
+      if ('accumulatedTime' in target) handlePauseStopwatch(target.id);
+      else if ('remainingTime' in target) handlePauseTimer(target.id);
+      else handlePauseInterval(target.id);
+      return true;
+    };
+
+    const startTarget = () => {
+      const target = getTargetClock();
+      if (!target || target.isCompleted) return false;
+      if ('accumulatedTime' in target) handleStartStopwatch(target.id);
+      else if ('remainingTime' in target) handleStartTimer(target.id);
+      else handleStartInterval(target.id);
+      return true;
+    };
 
     const startCandidate = () => {
       const candidate = getStartCandidate();
@@ -293,13 +321,10 @@ export default function App() {
       // asynchronous, so relying only on state here can make the second
       // gesture see the previous START/PAUSE state.
       if (proximityRunningRef.current) {
-        const running = getRunning();
-        if (running) {
-          pauseRunning();
-        }
+        pauseTarget();
         proximityRunningRef.current = false;
       } else {
-        startCandidate();
+        startTarget();
         proximityRunningRef.current = true;
       }
     };
@@ -714,6 +739,7 @@ export default function App() {
   // STOPWATCH ACTIONS
   // ==========================================
   const handleStartStopwatch = (id: string) => {
+    proximityTargetRef.current = { type: 'stopwatch', id };
     backgroundNotificationService.requestNotificationPermission();
     setStopwatches((prev) =>
       prev.map((sw) => (sw.id === id ? { ...sw, isRunning: true, startedAt: Date.now() } : sw))
@@ -721,6 +747,7 @@ export default function App() {
   };
 
     const handlePauseStopwatch = (id: string) => {
+    proximityTargetRef.current = { type: 'stopwatch', id };
     setStopwatches((prev) =>
       prev.map((sw) => {
         if (sw.id === id && sw.isRunning && sw.startedAt) {
@@ -839,6 +866,7 @@ export default function App() {
   // TIMER ACTIONS
   // ==========================================
   const handleStartTimer = (id: string) => {
+    proximityTargetRef.current = { type: 'timer', id };
     soundEngine.stopAlarm(id);
     firedTimerIds.current.delete(id);
     backgroundNotificationService.requestNotificationPermission();
@@ -864,6 +892,7 @@ export default function App() {
   };
 
   const handlePauseTimer = (id: string) => {
+    proximityTargetRef.current = { type: 'timer', id };
     soundEngine.stopAlarm(id);
     capacitorBridge.cancelAlarm(getNumericId(id));
     setTimers((prev) =>
@@ -1006,6 +1035,7 @@ export default function App() {
   // INTERVAL ACTIONS
   // ==========================================
   const handleStartInterval = (id: string) => {
+    proximityTargetRef.current = { type: 'interval', id };
     backgroundNotificationService.requestNotificationPermission();
     firedIntervalIds.current.delete(id);
     setIntervals((prev) =>
@@ -1014,6 +1044,7 @@ export default function App() {
   };
 
   const handlePauseInterval = (id: string) => {
+    proximityTargetRef.current = { type: 'interval', id };
     setIntervals((prev) =>
       prev.map((inv) => {
         if (inv.id === id && inv.isRunning && inv.startedAt) {
