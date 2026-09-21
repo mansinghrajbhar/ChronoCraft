@@ -3,7 +3,7 @@ import { SoundPreset } from '../types';
 import { soundEngine } from '../utils/audio';
 import { speechAssistant } from '../utils/speech';
 import { capacitorBridge } from '../utils/capacitorNativeBridge';
-import { ProximityAction } from '../types';
+import type { ProximityAction } from '../types';
 import { 
   X, 
   Volume2, 
