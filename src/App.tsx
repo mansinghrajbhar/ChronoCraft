@@ -187,6 +187,13 @@ export default function App() {
   const reachedTargetGoals = useRef<Set<string>>(new Set());
   const lastPhaseKey = useRef<Map<string, string>>(new Map());
 
+  // Keep the latest clock state available to the always-on proximity listener.
+  const proximityStopwatchesRef = useRef(stopwatches);
+  const proximityTimersRef = useRef(timers);
+  const proximityIntervalsRef = useRef(intervals);
+  const proximityActionRef = useRef(proximityAction);
+  const proximityEnabledRef = useRef(proximityEnabled);
+
   // Track page visibility changes for adaptive power saving
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -216,77 +223,135 @@ export default function App() {
     return () => window.removeEventListener('click', handleGlobalClick);
   }, []);
 
+  // Keep the proximity listener stable. Re-registering it every time a timer changes
+  // could swallow the first FAR -> NEAR transition and make START appear unresponsive.
   useEffect(() => {
-    if (!proximityEnabled || !capacitorBridge.isAndroid()) {
-      capacitorBridge.stopProximitySensor();
-      return;
-    }
+    proximityStopwatchesRef.current = stopwatches;
+    proximityTimersRef.current = timers;
+    proximityIntervalsRef.current = intervals;
+    proximityActionRef.current = proximityAction;
+    proximityEnabledRef.current = proximityEnabled;
+  }, [stopwatches, timers, intervals, proximityAction, proximityEnabled]);
+
+  useEffect(() => {
+    if (!capacitorBridge.isAndroid()) return;
 
     let listenerHandle: { remove: () => Promise<void> } | null = null;
     let cancelled = false;
     let wasNear = false;
     let hasReading = false;
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    let nearStartedAt = 0;
+    let holdTriggeredStop = false;
 
-    const runAction = () => {
-      if (proximityAction === 'start') {
-        const candidate = stopwatches.find((s) => !s.isRunning) || timers.find((t) => !t.isRunning && !t.isCompleted) || intervals.find((i) => !i.isRunning && !i.isCompleted);
-        if (candidate) {
-          if ('accumulatedTime' in candidate) handleStartStopwatch(candidate.id);
-          else if ('remainingTime' in candidate) handleStartTimer(candidate.id);
-          else handleStartInterval(candidate.id);
-        }
-      } else if (proximityAction === 'pause') {
-        const candidate = stopwatches.find((s) => s.isRunning) || timers.find((t) => t.isRunning) || intervals.find((i) => i.isRunning);
-        if (candidate) {
-          if ('accumulatedTime' in candidate) handlePauseStopwatch(candidate.id);
-          else if ('remainingTime' in candidate) handlePauseTimer(candidate.id);
-          else handlePauseInterval(candidate.id);
-        }
-      } else if (proximityAction === 'stop') {
-        const candidate = stopwatches.find((s) => s.isRunning) || timers.find((t) => t.isRunning) || intervals.find((i) => i.isRunning);
-        if (candidate) {
-          if ('accumulatedTime' in candidate) handleResetStopwatch(candidate.id);
-          else if ('remainingTime' in candidate) handleResetTimer(candidate.id);
-          else handleResetInterval(candidate.id);
-        }
-      } else {
-        const running = stopwatches.find((s) => s.isRunning) || timers.find((t) => t.isRunning) || intervals.find((i) => i.isRunning);
-        if (running) {
-          if ('accumulatedTime' in running) handlePauseStopwatch(running.id);
-          else if ('remainingTime' in running) handlePauseTimer(running.id);
-          else handlePauseInterval(running.id);
-        } else {
-          const candidate = stopwatches.find((s) => !s.isRunning) || timers.find((t) => !t.isRunning && !t.isCompleted) || intervals.find((i) => !i.isRunning && !i.isCompleted);
-          if (candidate) {
-            if ('accumulatedTime' in candidate) handleStartStopwatch(candidate.id);
-            else if ('remainingTime' in candidate) handleStartTimer(candidate.id);
-            else handleStartInterval(candidate.id);
-          }
+    const getRunning = () =>
+      proximityStopwatchesRef.current.find((s) => s.isRunning) ||
+      proximityTimersRef.current.find((t) => t.isRunning) ||
+      proximityIntervalsRef.current.find((i) => i.isRunning);
+
+    const getStartCandidate = () =>
+      proximityStopwatchesRef.current.find((s) => !s.isRunning) ||
+      proximityTimersRef.current.find((t) => !t.isRunning && !t.isCompleted) ||
+      proximityIntervalsRef.current.find((i) => !i.isRunning && !i.isCompleted);
+
+    const startCandidate = () => {
+      const candidate = getStartCandidate();
+      if (!candidate) return;
+      if ('accumulatedTime' in candidate) handleStartStopwatch(candidate.id);
+      else if ('remainingTime' in candidate) handleStartTimer(candidate.id);
+      else handleStartInterval(candidate.id);
+    };
+
+    const pauseRunning = () => {
+      const running = getRunning();
+      if (!running) return false;
+      if ('accumulatedTime' in running) handlePauseStopwatch(running.id);
+      else if ('remainingTime' in running) handlePauseTimer(running.id);
+      else handlePauseInterval(running.id);
+      return true;
+    };
+
+    const stopRunning = () => {
+      const running = getRunning();
+      if (!running) return;
+      if ('accumulatedTime' in running) handleResetStopwatch(running.id);
+      else if ('remainingTime' in running) handleResetTimer(running.id);
+      else handleResetInterval(running.id);
+    };
+
+    // "Cycle" is now a glove-friendly smart gesture:
+    // - quick FAR -> NEAR: START if stopped, otherwise PAUSE
+    // - keep the glove near for 1.2 seconds: STOP/RESET
+    const quickStartPause = () => {
+      if (getRunning()) pauseRunning();
+      else startCandidate();
+    };
+
+    const runSelectedAction = () => {
+      const action = proximityActionRef.current;
+      if (action === 'start') startCandidate();
+      else if (action === 'pause') pauseRunning();
+      else if (action === 'stop') stopRunning();
+      else quickStartPause();
+    };
+
+    const handleProximity = ({ near }: { near: boolean }) => {
+      if (!proximityEnabledRef.current) return;
+
+      if (!hasReading) {
+        hasReading = true;
+        wasNear = near;
+        return;
+      }
+
+      // FAR -> NEAR begins a gesture.
+      if (near && !wasNear) {
+        nearStartedAt = Date.now();
+        holdTriggeredStop = false;
+
+        if (proximityActionRef.current === 'cycle') {
+          holdTimer = setTimeout(() => {
+            if (wasNear && !holdTriggeredStop) {
+              holdTriggeredStop = true;
+              stopRunning();
+            }
+          }, 1200);
         }
       }
+
+      // NEAR -> FAR completes a quick gesture.
+      if (!near && wasNear) {
+        if (holdTimer) {
+          clearTimeout(holdTimer);
+          holdTimer = null;
+        }
+
+        if (!holdTriggeredStop) {
+          runSelectedAction();
+        }
+
+        nearStartedAt = 0;
+      }
+
+      wasNear = near;
     };
 
     const setup = async () => {
-      listenerHandle = await capacitorBridge.addProximityListener(({ near }) => {
-        if (!hasReading) {
-          hasReading = true;
-          wasNear = near;
-          return;
-        }
-        if (near && !wasNear) runAction();
-        wasNear = near;
-      });
-      if (!cancelled) await capacitorBridge.startProximitySensor(proximityAction);
+      listenerHandle = await capacitorBridge.addProximityListener(handleProximity);
+      if (!cancelled && proximityEnabledRef.current) {
+        await capacitorBridge.startProximitySensor(proximityActionRef.current);
+      }
     };
 
     setup();
 
     return () => {
       cancelled = true;
+      if (holdTimer) clearTimeout(holdTimer);
       listenerHandle?.remove().catch(() => {});
       capacitorBridge.stopProximitySensor();
     };
-  }, [proximityEnabled, proximityAction, stopwatches, timers, intervals]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('chronocraft_proximity_enabled', String(proximityEnabled));
