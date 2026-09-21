@@ -306,33 +306,34 @@ export default function App() {
         return;
       }
 
-      // FAR -> NEAR begins a gesture.
+      // FAR -> NEAR is the actual trigger. This makes the control work
+      // with a boxing glove: bring the glove to the sensor and the action
+      // happens immediately; there is no need to touch the screen or move
+      // the glove away first.
       if (near && !wasNear) {
         nearStartedAt = Date.now();
         holdTriggeredStop = false;
 
         if (proximityActionRef.current === 'cycle') {
+          // Quick near = START/PAUSE immediately.
+          quickStartPause();
+
+          // Holding near for 1.2s = STOP/RESET.
           holdTimer = setTimeout(() => {
             if (wasNear && !holdTriggeredStop) {
               holdTriggeredStop = true;
               stopRunning();
             }
           }, 1200);
+        } else {
+          runSelectedAction();
         }
       }
 
-      // NEAR -> FAR completes a quick gesture.
-      if (!near && wasNear) {
-        if (holdTimer) {
-          clearTimeout(holdTimer);
-          holdTimer = null;
-        }
-
-        if (!holdTriggeredStop) {
-          runSelectedAction();
-        }
-
-        nearStartedAt = 0;
+      // NEAR -> FAR simply arms the next trigger.
+      if (!near && wasNear && holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
       }
 
       wasNear = near;
