@@ -341,6 +341,8 @@ export default function App() {
 
     const setup = async () => {
       listenerHandle = await capacitorBridge.addProximityListener(handleProximity);
+      // If proximity was already enabled when the app mounted, start it
+      // after the listener is attached so the first reading is not missed.
       if (!cancelled && proximityEnabledRef.current) {
         await capacitorBridge.startProximitySensor(proximityActionRef.current);
       }
@@ -360,6 +362,19 @@ export default function App() {
     localStorage.setItem('chronocraft_proximity_enabled', String(proximityEnabled));
     localStorage.setItem('chronocraft_proximity_action', proximityAction);
   }, [proximityEnabled, proximityAction]);
+
+  // Start/stop the native proximity sensor whenever the user changes
+  // the setting. The listener itself stays registered for the lifetime
+  // of the app, but the sensor must also be started after a late toggle.
+  useEffect(() => {
+    if (!capacitorBridge.isAndroid()) return;
+
+    if (proximityEnabled) {
+      capacitorBridge.startProximitySensor(proximityAction);
+    } else {
+      capacitorBridge.stopProximitySensor();
+    }
+  }, [proximityEnabled]);
 
   // Sync Voice Preference with Speech Manager
   useEffect(() => {
